@@ -10,6 +10,7 @@ para 70+ tickers en cada request del usuario (ver scripts/warmup_cache.py).
 """
 from __future__ import annotations
 import logging
+from datetime import datetime
 from typing import Optional
 
 import httpx
@@ -90,9 +91,19 @@ def get_fundamentals(ticker: str) -> dict:
             result["pe_ratio"] = r.get("priceToEarningsRatioTTM") or r.get("peRatioTTM")
             result["price_to_book"] = r.get("priceToBookRatioTTM")
             result["debt_to_equity"] = r.get("debtToEquityRatioTTM") or r.get("debtEquityRatioTTM")
-            result["roe"] = r.get("returnOnEquityTTM")
     except (FMPError, httpx.HTTPError, IndexError, KeyError) as e:
         logger.warning("ratios falló para %s: %s", ticker, e)
+        result["_partial"] = True
+
+    try:
+        # ROE no está en ratios-ttm (ese endpoint no expone ningún return*);
+        # el campo real returnOnEquityTTM vive en key-metrics-ttm.
+        key_metrics = _get("key-metrics-ttm", params={"symbol": ticker})
+        if key_metrics:
+            km = key_metrics[0]
+            result["roe"] = km.get("returnOnEquityTTM")
+    except (FMPError, httpx.HTTPError, IndexError, KeyError) as e:
+        logger.warning("key-metrics falló para %s: %s", ticker, e)
         result["_partial"] = True
 
     try:
@@ -106,11 +117,25 @@ def get_fundamentals(ticker: str) -> dict:
         result["_partial"] = True
 
     try:
-        estimates = _get("analyst-estimates", params={"symbol": ticker, "period": "annual", "page": 0, "limit": 1})
+        # El campo real es epsAvg (no estimatedEpsAvg). El endpoint devuelve
+        # filas anuales ordenadas por fecha desc, incluyendo años futuros, así
+        # que en vez de tomar un nivel de EPS suelto calculamos el crecimiento
+        # de EPS estimado del próximo año fiscal vs el año base (el más reciente
+        # <= hoy) — que es lo que el nombre del campo realmente describe.
+        estimates = _get("analyst-estimates", params={"symbol": ticker, "period": "annual", "page": 0, "limit": 8})
         if estimates:
-            est = estimates[0]
-            # campos típicos del endpoint stable: estimatedEpsAvg, estimatedRevenueAvg
-            result["eps_growth_estimate_next_y"] = est.get("estimatedEpsAvg")
+            eps_by_year = {}
+            for e in estimates:
+                d = str(e.get("date") or "")
+                eps = e.get("epsAvg")
+                if len(d) >= 4 and d[:4].isdigit() and eps is not None:
+                    eps_by_year[int(d[:4])] = float(eps)
+            if eps_by_year:
+                cur_year = datetime.now().year
+                base_year = max((y for y in eps_by_year if y <= cur_year), default=min(eps_by_year))
+                base, nxt = eps_by_year.get(base_year), eps_by_year.get(base_year + 1)
+                if base and base > 0 and nxt is not None:
+                    result["eps_growth_estimate_next_y"] = nxt / base - 1
     except (FMPError, httpx.HTTPError, IndexError, KeyError) as e:
         logger.warning("estimates falló para %s: %s", ticker, e)
         result["_partial"] = True
