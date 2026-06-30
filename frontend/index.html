@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portfolio Builder · Portfolio Investment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg-0:#0a0e17; --bg-1:#0e1420; --bg-2:#141b2a; --bg-3:#1b2333;
+    --border:#222b3d; --border-soft:#1a2233;
+    --text-0:#e8edf5; --text-1:#9aa7bd; --text-2:#5e6c84;
+    --teal:#1fd1a8; --teal-dim:#13a884;
+    --gold:#e0b04a;
+    --red:#e15a5a; --red-dim:#7a2f33;
+    --green:#1fd1a8;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg-0); color:var(--text-0);
+    font-family:'Inter',sans-serif; min-height:100vh;
+  }
+  .mono{font-family:'JetBrains Mono',monospace;}
+  header{
+    border-bottom:1px solid var(--border); padding:18px 28px;
+    display:flex; align-items:center; justify-content:space-between;
+    background:linear-gradient(180deg, var(--bg-1), var(--bg-0));
+  }
+  header .brand{display:flex; align-items:center; gap:10px;}
+  header .brand .dot{width:8px;height:8px;border-radius:50%;background:var(--teal);box-shadow:0 0 8px var(--teal);}
+  header h1{font-size:15px; font-weight:600; letter-spacing:.04em; margin:0; text-transform:uppercase;}
+  header .sub{color:var(--text-2); font-size:11px; margin-top:2px;}
+  .layout{display:grid; grid-template-columns:340px 1fr; gap:0; min-height:calc(100vh - 60px);}
+  @media (max-width:900px){.layout{grid-template-columns:1fr;}}
+
+  .panel{
+    background:var(--bg-1); border-right:1px solid var(--border);
+    padding:24px; position:sticky; top:0; align-self:start;
+  }
+  .field{margin-bottom:18px;}
+  .field label{
+    display:block; font-size:10px; text-transform:uppercase; letter-spacing:.08em;
+    color:var(--text-2); margin-bottom:7px; font-weight:600;
+  }
+  .field input[type=number], .field select{
+    width:100%; background:var(--bg-2); border:1px solid var(--border);
+    color:var(--text-0); padding:10px 12px; border-radius:6px; font-size:14px;
+    font-family:'JetBrains Mono',monospace;
+  }
+  .field input[type=number]:focus, .field select:focus{outline:none; border-color:var(--teal);}
+  .risk-options{display:flex; gap:6px;}
+  .risk-options button{
+    flex:1; background:var(--bg-2); border:1px solid var(--border); color:var(--text-1);
+    padding:9px 4px; font-size:11px; border-radius:6px; cursor:pointer; font-weight:600;
+    text-transform:uppercase; letter-spacing:.03em; transition:.15s;
+  }
+  .risk-options button.active{background:rgba(31,209,168,.12); border-color:var(--teal); color:var(--teal);}
+  .toggles{display:flex; flex-direction:column; gap:8px;}
+  .toggle-row{display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-1);}
+  .toggle-row input{accent-color:var(--teal);}
+  textarea{
+    width:100%; background:var(--bg-2); border:1px solid var(--border); color:var(--text-0);
+    padding:10px 12px; border-radius:6px; font-size:12px; font-family:'JetBrains Mono',monospace;
+    min-height:54px; resize:vertical;
+  }
+  .build-btn{
+    width:100%; background:var(--teal); color:#06140f; border:none; padding:13px;
+    border-radius:6px; font-weight:700; font-size:13px; letter-spacing:.03em;
+    text-transform:uppercase; cursor:pointer; margin-top:6px; transition:.15s;
+  }
+  .build-btn:hover{background:#33dab4;}
+  .build-btn:disabled{background:var(--bg-3); color:var(--text-2); cursor:not-allowed;}
+  .hint{font-size:10.5px; color:var(--text-2); margin-top:8px; line-height:1.5;}
+
+  main{padding:28px;}
+  .empty-state{
+    height:60vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    color:var(--text-2); text-align:center; gap:8px;
+  }
+  .empty-state .icon{font-size:34px; opacity:.4;}
+
+  .stats-row{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:22px;}
+  @media (max-width:700px){.stats-row{grid-template-columns:repeat(2,1fr);}}
+  .stat-card{
+    background:var(--bg-1); border:1px solid var(--border); border-radius:8px; padding:16px;
+  }
+  .stat-card .label{font-size:10px; color:var(--text-2); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;}
+  .stat-card .value{font-size:21px; font-weight:600; font-family:'JetBrains Mono',monospace;}
+  .stat-card .value.pos{color:var(--teal);}
+  .stat-card .value.neg{color:var(--red);}
+
+  .grid-2{display:grid; grid-template-columns:1.3fr 1fr; gap:18px; margin-bottom:18px;}
+  @media (max-width:900px){.grid-2{grid-template-columns:1fr;}}
+
+  .card{background:var(--bg-1); border:1px solid var(--border); border-radius:8px; padding:18px;}
+  .card h3{
+    font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-2);
+    margin:0 0 14px 0; font-weight:600;
+  }
+
+  table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  th{
+    text-align:left; padding:8px 10px; color:var(--text-2); font-size:10px;
+    text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid var(--border); font-weight:600;
+  }
+  td{padding:9px 10px; border-bottom:1px solid var(--border-soft); vertical-align:top;}
+  tr:last-child td{border-bottom:none;}
+  .ticker{font-family:'JetBrains Mono',monospace; font-weight:700; color:var(--text-0);}
+  .sector-tag{
+    font-size:9.5px; color:var(--text-2); text-transform:uppercase; letter-spacing:.04em;
+  }
+  .weight-bar-wrap{display:flex; align-items:center; gap:8px;}
+  .weight-bar{
+    flex:1; height:5px; background:var(--bg-3); border-radius:3px; overflow:hidden; min-width:50px;
+  }
+  .weight-bar > div{height:100%; background:var(--teal); border-radius:3px;}
+  .amount{font-family:'JetBrains Mono',monospace; color:var(--text-0);}
+  .score-badge{
+    font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700;
+    padding:2px 6px; border-radius:4px; display:inline-block;
+  }
+  .rationale{color:var(--text-1); font-size:11.5px; line-height:1.4; max-width:340px;}
+
+  .warning-box{
+    background:rgba(224,176,74,.08); border:1px solid rgba(224,176,74,.3); border-radius:6px;
+    padding:10px 14px; margin-bottom:18px; font-size:11.5px; color:var(--gold);
+  }
+  .error-box{
+    background:rgba(225,90,90,.08); border:1px solid rgba(225,90,90,.3); border-radius:6px;
+    padding:14px; color:var(--red); font-size:12.5px;
+  }
+  .spinner{
+    width:16px; height:16px; border:2px solid rgba(255,255,255,.2); border-top-color:#06140f;
+    border-radius:50%; animation:spin .7s linear infinite; display:inline-block; vertical-align:middle; margin-right:8px;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  footer{padding:18px 28px; color:var(--text-2); font-size:10.5px; border-top:1px solid var(--border); text-align:center;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="dot"></div>
+    <div>
+      <h1>Portfolio Builder</h1>
+      <div class="sub">EEUU + ADRs Argentinos · Black-Litterman / Markowitz</div>
+    </div>
+  </div>
+  <div class="sub mono" id="apiStatus">conectando...</div>
+</header>
+
+<div class="layout">
+  <aside class="panel">
+    <div class="field">
+      <label>Monto a invertir (USD)</label>
+      <input type="number" id="amount" value="10000" min="100" step="100">
+    </div>
+
+    <div class="field">
+      <label>Perfil de riesgo</label>
+      <div class="risk-options">
+        <button data-risk="conservador">Conservador</button>
+        <button data-risk="moderado" class="active">Moderado</button>
+        <button data-risk="agresivo">Agresivo</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Universo</label>
+      <div class="toggles">
+        <label class="toggle-row"><input type="checkbox" id="onlyUS"> Solo acciones EEUU</label>
+        <label class="toggle-row"><input type="checkbox" id="onlyAR"> Solo ADRs argentinos</label>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Excluir tickers (opcional, separados por coma)</label>
+      <textarea id="excludeTickers" placeholder="ej: TSLA, YPF"></textarea>
+    </div>
+
+    <button class="build-btn" id="buildBtn">Armar cartera</button>
+    <div class="hint">
+      El backend cachea fundamentals 24hs. Si es la primera corrida del día,
+      puede tardar — está pegándole a FMP/yfinance en vivo.
+    </div>
+  </aside>
+
+  <main>
+    <div id="content">
+      <div class="empty-state">
+        <div class="icon">◆</div>
+        <div>Configurá el monto y el perfil de riesgo,<br>y armá la cartera.</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<footer>Portfolio Investment · Herramienta interna · Datos: yfinance + Financial Modeling Prep · No constituye recomendación de inversión</footer>
+
+<script>
+const API_BASE = "http://127.0.0.1:8000/api";
+let currentRisk = "moderado";
+let sectorChart = null;
+
+document.querySelectorAll(".risk-options button").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    document.querySelectorAll(".risk-options button").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    currentRisk = btn.dataset.risk;
+  });
+});
+
+document.getElementById("onlyUS").addEventListener("change", e=>{
+  if(e.target.checked) document.getElementById("onlyAR").checked=false;
+});
+document.getElementById("onlyAR").addEventListener("change", e=>{
+  if(e.target.checked) document.getElementById("onlyUS").checked=false;
+});
+
+async function checkApi(){
+  const el = document.getElementById("apiStatus");
+  try{
+    const res = await fetch(API_BASE.replace("/api","/"));
+    if(res.ok){ el.textContent = "● backend ok"; el.style.color = "#1fd1a8"; }
+    else throw new Error();
+  }catch(e){
+    el.textContent = "● backend no responde (¿corriste uvicorn?)";
+    el.style.color = "#e15a5a";
+  }
+}
+checkApi();
+
+document.getElementById("buildBtn").addEventListener("click", buildPortfolio);
+
+async function buildPortfolio(){
+  const amount = parseFloat(document.getElementById("amount").value);
+  const onlyUS = document.getElementById("onlyUS").checked;
+  const onlyAR = document.getElementById("onlyAR").checked;
+  const exclude = document.getElementById("excludeTickers").value
+    .split(",").map(s=>s.trim().toUpperCase()).filter(Boolean);
+
+  if(!amount || amount <= 0){
+    alert("Ingresá un monto válido.");
+    return;
+  }
+
+  const btn = document.getElementById("buildBtn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Calculando...';
+
+  const content = document.getElementById("content");
+  content.innerHTML = '<div class="empty-state"><div class="icon">⟳</div><div>Analizando universo, scoring y optimizando cartera...</div></div>';
+
+  try{
+    const res = await fetch(`${API_BASE}/portfolio/build`, {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({
+        amount_usd: amount,
+        risk_profile: currentRisk,
+        exclude_tickers: exclude,
+        only_argentina: onlyAR,
+        only_us: onlyUS,
+      })
+    });
+    if(!res.ok){
+      const err = await res.json().catch(()=>({detail:res.statusText}));
+      throw new Error(err.detail || "Error desconocido");
+    }
+    const data = await res.json();
+    renderPortfolio(data);
+  }catch(e){
+    content.innerHTML = `<div class="error-box"><strong>Error armando la cartera:</strong><br>${e.message}</div>`;
+  }finally{
+    btn.disabled = false;
+    btn.textContent = "Armar cartera";
+  }
+}
+
+function fmtUSD(n){
+  return "$" + n.toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function fmtPct(n){
+  return (n*100).toFixed(2) + "%";
+}
+
+function scoreColor(score){
+  if(score >= 70) return "background:rgba(31,209,168,.15); color:#1fd1a8;";
+  if(score >= 40) return "background:rgba(224,176,74,.15); color:#e0b04a;";
+  return "background:rgba(225,90,90,.15); color:#e15a5a;";
+}
+
+function renderPortfolio(data){
+  const content = document.getElementById("content");
+
+  let warningsHtml = "";
+  if(data.warnings && data.warnings.length){
+    warningsHtml = data.warnings.map(w=>`<div class="warning-box">⚠ ${w}</div>`).join("");
+  }
+
+  const retClass = data.expected_return_annual >= 0 ? "pos" : "neg";
+
+  const rowsHtml = data.allocations.map(a=>`
+    <tr>
+      <td>
+        <div class="ticker">${a.ticker}</div>
+        <div class="sector-tag">${a.sector}</div>
+      </td>
+      <td>
+        <div class="weight-bar-wrap">
+          <span class="mono">${fmtPct(a.weight)}</span>
+          <div class="weight-bar"><div style="width:${Math.min(a.weight*100*2.2,100)}%"></div></div>
+        </div>
+      </td>
+      <td class="amount">${fmtUSD(a.amount_usd)}</td>
+      <td class="mono">${a.shares_approx.toFixed(3)}</td>
+      <td class="mono">${fmtUSD(a.last_price)}</td>
+      <td><span class="score-badge" style="${scoreColor(a.composite_score)}">${a.composite_score.toFixed(0)}</span></td>
+      <td class="rationale">${a.rationale}</td>
+    </tr>
+  `).join("");
+
+  content.innerHTML = `
+    ${warningsHtml}
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="label">Retorno esperado anual</div>
+        <div class="value ${retClass}">${fmtPct(data.expected_return_annual)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Volatilidad esperada anual</div>
+        <div class="value">${fmtPct(data.expected_volatility_annual)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Sharpe aprox.</div>
+        <div class="value">${data.sharpe_approx !== null ? data.sharpe_approx.toFixed(2) : "—"}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Cash sin invertir</div>
+        <div class="value">${fmtUSD(data.cash_leftover_usd)}</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3>Asignación por sector</h3>
+        <canvas id="sectorChart" height="220"></canvas>
+      </div>
+      <div class="card">
+        <h3>Resumen</h3>
+        <table>
+          <tr><td style="color:var(--text-2)">Monto total</td><td class="amount" style="text-align:right">${fmtUSD(data.amount_usd)}</td></tr>
+          <tr><td style="color:var(--text-2)">Perfil</td><td style="text-align:right; text-transform:capitalize">${data.risk_profile}</td></tr>
+          <tr><td style="color:var(--text-2)">Posiciones</td><td style="text-align:right">${data.allocations.length}</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Detalle de la cartera</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Ticker</th><th>Peso</th><th>Monto</th><th>Cant. aprox.</th>
+            <th>Precio</th><th>Score</th><th>Justificación</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>
+  `;
+
+  renderSectorChart(data.allocations);
+}
+
+function renderSectorChart(allocations){
+  const bySector = {};
+  allocations.forEach(a=>{ bySector[a.sector] = (bySector[a.sector]||0) + a.weight; });
+
+  const ctx = document.getElementById("sectorChart");
+  if(sectorChart) sectorChart.destroy();
+
+  const palette = ["#1fd1a8","#e0b04a","#5b8def","#e15a5a","#9b6bd8","#3fb6c9","#d88f4e","#7fd17a","#c4607a","#6c7fd8"];
+
+  sectorChart = new Chart(ctx, {
+    type: "doughnut",
+    data: {
+      labels: Object.keys(bySector),
+      datasets: [{
+        data: Object.values(bySector).map(v=>v*100),
+        backgroundColor: palette,
+        borderColor: "#0e1420",
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      plugins: {
+        legend: { position: "right", labels: { color: "#9aa7bd", font:{size:11, family:"Inter"}, boxWidth:10 } },
+        tooltip: { callbacks: { label: (c)=> `${c.label}: ${c.parsed.toFixed(1)}%` } }
+      },
+      cutout: "62%",
+    }
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+.env
+
+# Caché local (se regenera, no va al repo)
+backend/cache/
+
+# OS
+.DS_Store
+Thumbs.db
