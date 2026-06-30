@@ -4,7 +4,9 @@ import logging
 import pandas as pd
 from fastapi import APIRouter, HTTPException
 
-from app.config import RISK_PROFILES, RISK_FREE_RATE_ANNUAL, full_universe
+from app.config import (
+    RISK_PROFILES, RISK_FREE_RATE_ANNUAL, MARKET_PROXY_TICKER, full_universe,
+)
 from app.data import prices as prices_mod
 from app.data import fundamentals as fundamentals_mod
 from app.models import scoring, optimization
@@ -17,19 +19,31 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _build_factor_table(tickers: list[str]) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series]:
+def _build_factor_table(
+    tickers: list[str],
+) -> tuple[pd.DataFrame, pd.DataFrame, list[str], pd.Series | None]:
     """Trae precios + fundamentals para `tickers` y devuelve:
-    (factor_table, price_df, sector_series)"""
-    price_df = prices_mod.fetch_price_history(tickers)
+    (factor_table, price_df, dropped, market_series).
+
+    Descarga también el proxy de mercado (SPY) en la misma corrida para:
+      1) calcular el momentum RELATIVO al mercado (excess return), y
+      2) tener la serie alineada para las métricas beta/alpha de la cartera.
+    SPY nunca entra como activo invertible (no está en `tickers`)."""
+    price_df = prices_mod.fetch_price_history(tickers + [MARKET_PROXY_TICKER])
+    market_series = (
+        price_df[MARKET_PROXY_TICKER] if MARKET_PROXY_TICKER in price_df.columns else None
+    )
     available = [t for t in tickers if t in price_df.columns]
     dropped = sorted(set(tickers) - set(available))
     if dropped:
         logger.warning("Tickers sin datos suficientes de precio, excluidos: %s", dropped)
+    if market_series is None:
+        logger.warning("No se pudo descargar el proxy de mercado %s; momentum cae a absoluto.", MARKET_PROXY_TICKER)
 
-    momentum = prices_mod.momentum_score(price_df[available])
+    momentum = prices_mod.relative_momentum_score(price_df[available], market_series)
     fundamentals = fundamentals_mod.get_fundamentals_bulk(available)
     factor_table = scoring.build_factor_table(fundamentals, momentum)
-    return factor_table, price_df[available], dropped
+    return factor_table, price_df[available], dropped, market_series
 
 
 @router.get("/universe", response_model=list[UniverseTicker])
@@ -57,7 +71,7 @@ def build_portfolio(req: PortfolioRequest):
     warnings: list[str] = []
 
     try:
-        factor_table, price_df, dropped = _build_factor_table(tickers)
+        factor_table, price_df, dropped, market_series = _build_factor_table(tickers)
     except Exception as e:
         logger.exception("Error armando factor table")
         raise HTTPException(502, f"Error obteniendo datos de mercado: {e}")
@@ -104,6 +118,11 @@ def build_portfolio(req: PortfolioRequest):
     stats = optimization.portfolio_stats(weights, posterior_returns, annual_cov)
     last_prices = prices_mod.latest_prices(sub_prices)
 
+    # Métricas vs mercado (históricas) de la cartera final
+    mkt_stats = optimization.market_relative_stats(
+        sub_prices, weights, market_series, RISK_FREE_RATE_ANNUAL
+    )
+
     allocations = []
     invested = 0.0
     for ticker, w in weights.items():
@@ -137,6 +156,10 @@ def build_portfolio(req: PortfolioRequest):
             if stats["expected_volatility_annual"] else None
         ),
         cash_leftover_usd=cash_leftover,
+        market_proxy=MARKET_PROXY_TICKER if market_series is not None else None,
+        beta_vs_market=mkt_stats["beta"],
+        alpha_annual_vs_market=mkt_stats["alpha_annual"],
+        tracking_error_annual=mkt_stats["tracking_error_annual"],
         warnings=warnings,
     )
 
@@ -152,9 +175,9 @@ def _build_rationale(ticker: str, row: pd.Series) -> str:
     if row.get("score_growth_future", 0) > 0.3:
         parts.append("estimados de crecimiento futuro por encima del promedio")
     if row.get("score_momentum", 0) > 0.3:
-        parts.append("momentum de precio positivo (6m)")
+        parts.append("momentum superior al mercado (6m, vs SPY)")
     elif row.get("score_momentum", 0) < -0.3:
-        parts.append("momentum débil, posición chica por ese motivo")
+        parts.append("momentum por debajo del mercado, posición chica por ese motivo")
     if not parts:
         parts.append("score balanceado en todos los factores")
     return f"{ticker}: " + "; ".join(parts) + "."

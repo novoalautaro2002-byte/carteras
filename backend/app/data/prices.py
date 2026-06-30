@@ -111,3 +111,45 @@ def momentum_score(price_df: pd.DataFrame, lookback_days: int = 126) -> pd.Serie
     p_start = price_df.iloc[start_idx]
     p_end = price_df.iloc[end_idx]
     return (p_end / p_start) - 1
+
+
+def relative_momentum_score(
+    price_df: pd.DataFrame,
+    market_series: pd.Series | None = None,
+    lookback_days: int = 126,
+) -> pd.Series:
+    """
+    Momentum RESIDUAL (ajustado por beta) vs el mercado: para cada activo, su
+    momentum menos la parte explicada por su exposición al mercado, es decir
+    `momentum_activo − beta · momentum_mercado` en la misma ventana.
+
+    Por qué beta y no un simple (activo − mercado): restar el MISMO retorno de
+    mercado a todos es un shift uniforme que NO cambia el ranking cross-sectional
+    (el z-score es invariante a restar una constante). Para aislar de verdad la
+    fuerza propia hay que descontar la parte explicada por el beta de CADA activo,
+    que es distinta para cada uno. Así una acción high-beta que subió "a remolque"
+    del índice puntúa menos que una low-beta que subió por mérito propio. Si no
+    hay serie de mercado utilizable, cae al momentum absoluto.
+
+    Beta se estima con los retornos diarios de todo el historial disponible
+    (más estable que estimarlo en la ventana corta de momentum).
+    """
+    abs_mom = momentum_score(price_df, lookback_days)
+    if market_series is None or market_series.dropna().shape[0] < 60:
+        return abs_mom
+
+    mkt_mom = float(momentum_score(market_series.to_frame("__MKT__"), lookback_days).iloc[0])
+
+    daily = price_df.pct_change()
+    mkt_daily = market_series.pct_change().reindex(daily.index)
+    aligned = daily.join(mkt_daily.rename("__MKT__")).dropna()
+    mkt_var = aligned["__MKT__"].var() if aligned.shape[0] >= 30 else 0.0
+    if not mkt_var:
+        # sin datos para estimar beta: caemos a excess return simple
+        return abs_mom - mkt_mom
+
+    betas = aligned.drop(columns="__MKT__").apply(
+        lambda col: col.cov(aligned["__MKT__"]) / mkt_var
+    )
+    betas = betas.reindex(abs_mom.index).fillna(1.0)
+    return abs_mom - betas * mkt_mom

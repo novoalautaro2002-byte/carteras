@@ -51,8 +51,10 @@ US_UNIVERSE = {
 ARGENTINE_ADRS = {
     "Argentina": [
         "GGAL", "YPF", "PAM", "BMA", "BBAR", "CRESY", "CEPU", "EDN", "IRS",
-        "IRCP", "LOMA", "SUPV", "TEO", "TGS", "TS", "TX", "CAAP", "DESP",
+        "LOMA", "SUPV", "TEO", "TGS", "TS", "TX", "CAAP",
         "BIOX", "AGRO", "MELI", "VIST",
+        # IRCP y DESP quitados: delisted (IRCP fusionada en IRSA, DESP comprada
+        # por Prosus). yfinance no tenía precio -> se descartaban siempre.
     ]
 }
 

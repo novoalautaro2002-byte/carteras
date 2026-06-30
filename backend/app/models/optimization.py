@@ -179,3 +179,57 @@ def portfolio_stats(weights: pd.Series, expected_returns: pd.Series, cov: pd.Dat
         "expected_volatility_annual": vol,
         "sharpe_approx": exp_return / vol if vol > 0 else None,
     }
+
+
+def market_relative_stats(
+    asset_prices: pd.DataFrame,
+    weights: pd.Series,
+    market_series: pd.Series,
+    risk_free_rate: float,
+    trading_days: int = 252,
+) -> dict:
+    """
+    Métricas de la cartera final RELATIVAS al mercado (SPY), calculadas sobre
+    los retornos históricos diarios del lookback (mirada backward-looking, a
+    diferencia del retorno/vol esperados del optimizador que son forward):
+
+      - beta: sensibilidad de la cartera al mercado (regresión de retornos
+        diarios de la cartera contra los de SPY).
+      - alpha_annual: alpha de Jensen anualizado = ret_cartera - [rf + beta*(ret_mkt - rf)].
+        Retorno por encima de lo que explica la exposición al mercado.
+      - tracking_error_annual: desvío estándar anualizado del retorno relativo
+        (cartera - mercado). Cuánto se despega del índice.
+
+    Devuelve None en cada métrica si no hay datos suficientes o el mercado no
+    tiene varianza.
+    """
+    none = {"beta": None, "alpha_annual": None, "tracking_error_annual": None}
+    if market_series is None:
+        return none
+
+    rets = asset_prices.pct_change().dropna()
+    w = weights.reindex(rets.columns).fillna(0.0).values
+    port_ret = pd.Series(rets.values @ w, index=rets.index)
+
+    mkt_ret = market_series.pct_change().dropna()
+    common = port_ret.index.intersection(mkt_ret.index)
+    if len(common) < 30:
+        return none
+    pr = port_ret.loc[common].values
+    mr = mkt_ret.loc[common].values
+
+    mkt_var = float(np.var(mr, ddof=1))
+    if mkt_var == 0:
+        return none
+
+    beta = float(np.cov(pr, mr, ddof=1)[0, 1] / mkt_var)
+    port_ann = float((1 + pr.mean()) ** trading_days - 1)
+    mkt_ann = float((1 + mr.mean()) ** trading_days - 1)
+    alpha_annual = port_ann - (risk_free_rate + beta * (mkt_ann - risk_free_rate))
+    tracking_error_annual = float((pr - mr).std(ddof=1) * np.sqrt(trading_days))
+
+    return {
+        "beta": round(beta, 3),
+        "alpha_annual": round(alpha_annual, 4),
+        "tracking_error_annual": round(tracking_error_annual, 4),
+    }

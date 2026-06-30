@@ -30,6 +30,12 @@ class PortfolioResponse(BaseModel):
     expected_volatility_annual: float
     sharpe_approx: Optional[float]
     cash_leftover_usd: float
+    # Métricas vs mercado (históricas, sobre el lookback). None si no hay
+    # serie de mercado disponible.
+    market_proxy: Optional[str] = None
+    beta_vs_market: Optional[float] = None
+    alpha_annual_vs_market: Optional[float] = None
+    tracking_error_annual: Optional[float] = None
     warnings: list[str] = Field(default_factory=list)
 
 
