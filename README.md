@@ -11,6 +11,29 @@ Arma carteras de inversión a partir de un monto en USD, combinando:
   mercado ajustados por el scoring, optimizados por riesgo-retorno respetando
   los caps del perfil.
 
+## Subir esto a tu repo `carteras`
+
+Ya está todo commiteado localmente (`git log` te va a mostrar el commit
+inicial). En tu Lenovo, descomprimí el zip y corré:
+
+```bash
+cd portfolio-builder
+git remote add origin https://github.com/TU_USUARIO/carteras.git
+git branch -M main
+git push -u origin main
+```
+
+No lo pude pushear yo directamente — crear/autenticar contra tu cuenta de
+GitHub requeriría tus credenciales, y eso no lo hago. Pero el repo ya está
+inicializado con el commit hecho, así que es solo `remote add` + `push`.
+
+**Importante sobre la API key**: te dejé un `backend/.env` con tu
+`FMP_API_KEY` ya cargada para que funcione apenas lo bajes — **pero ese
+archivo está en `.gitignore` y no se va a subir a GitHub** (las keys nunca
+deberían vivir en un repo, ni siquiera privado). Si en algún momento ves que
+`git status` lo lista como "untracked" o (peor) "to be committed", pará y
+avisame — algo se rompió.
+
 ## Setup (local, en tu Lenovo)
 
 ### 1. Backend
@@ -21,8 +44,8 @@ python -m venv venv
 venv\Scripts\activate          # Windows
 pip install -r requirements.txt
 
-copy .env.example .env
-# Editá .env y pegá tu FMP_API_KEY (gratis en financialmodelingprep.com)
+# El .env con tu FMP_API_KEY ya está armado, no hace falta tocar nada.
+# Si lo borraste o cambiaste de máquina: copy .env.example .env y pegá tu key ahí.
 
 uvicorn app.main:app --reload --port 8000
 ```
