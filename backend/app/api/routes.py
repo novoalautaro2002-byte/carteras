@@ -1,5 +1,7 @@
 from __future__ import annotations
 import logging
+import math
+from datetime import datetime
 
 import pandas as pd
 from fastapi import APIRouter, HTTPException
@@ -12,8 +14,21 @@ from app.data import fundamentals as fundamentals_mod
 from app.models import scoring, optimization
 from app.schemas import (
     PortfolioRequest, PortfolioResponse, AssetAllocation,
-    UniverseTicker, RefreshResponse,
+    UniverseTicker, RefreshResponse, UniverseScanRow, UniverseScanResponse,
 )
+
+
+def _num(x, ndigits: int | None = None):
+    """Convierte a float JSON-safe: NaN/inf/None -> None, opcionalmente redondea."""
+    if x is None:
+        return None
+    try:
+        x = float(x)
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(x) or math.isinf(x):
+        return None
+    return round(x, ndigits) if ndigits is not None else x
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -198,3 +213,83 @@ def refresh_cache():
         except Exception as e:
             errors.append(f"{t}: {e}")
     return RefreshResponse(tickers_refreshed=refreshed, errors=errors)
+
+
+@router.get("/universe/scan", response_model=UniverseScanResponse)
+def universe_scan():
+    """Panel de mercado: todos los indicadores de todo el universo, en una sola
+    respuesta. Reusa el mismo pipeline que el armado de carteras (precios +
+    fundamentals + scoring) pero sin optimizar — es para explorar/screenear."""
+    universe = full_universe()
+    tickers = list(universe.keys())
+
+    try:
+        price_df = prices_mod.fetch_price_history(tickers + [MARKET_PROXY_TICKER])
+    except Exception as e:
+        logger.exception("Error en scan: precios")
+        raise HTTPException(502, f"Error obteniendo precios: {e}")
+
+    market_series = (
+        price_df[MARKET_PROXY_TICKER] if MARKET_PROXY_TICKER in price_df.columns else None
+    )
+    available = [t for t in tickers if t in price_df.columns]
+
+    momentum = prices_mod.relative_momentum_score(price_df[available], market_series)
+    fundamentals = fundamentals_mod.get_fundamentals_bulk(available)
+    factor_table = scoring.build_factor_table(fundamentals, momentum)
+    annual_return, _, annual_vol = prices_mod.compute_returns_and_covariance(price_df[available])
+    last_prices = prices_mod.latest_prices(price_df[available])
+
+    rows: list[UniverseScanRow] = []
+    for t in available:
+        ft = factor_table.loc[t]
+        f = fundamentals.get(t, {})
+        price = _num(last_prices.get(t))
+        target = _num(f.get("analyst_target_price"))
+        upside = (target / price - 1) if (target and price) else None
+
+        # dividend_yield en fundamentals guarda el último dividendo ($/acción);
+        # el yield real ~ dividendo / precio.
+        last_div = _num(f.get("dividend_yield"))
+        div_yield = (last_div / price) if (last_div and price) else None
+
+        pe = _num(ft.get("pe_ratio"))
+        roe = _num(ft.get("roe"))
+        partial = bool(f.get("_partial")) or pe is None or roe is None
+
+        rows.append(UniverseScanRow(
+            ticker=t,
+            sector=universe[t],
+            last_price=price,
+            composite_score=_num(ft.get("composite_score"), 1),
+            score_value=_num(ft.get("score_value"), 3),
+            score_quality=_num(ft.get("score_quality"), 3),
+            score_growth=_num(ft.get("score_growth_future"), 3),
+            score_momentum=_num(ft.get("score_momentum"), 3),
+            pe_ratio=_num(pe, 2),
+            price_to_book=_num(ft.get("price_to_book"), 2),
+            roe=_num(roe, 4),
+            debt_to_equity=_num(ft.get("debt_to_equity"), 3),
+            dividend_yield=_num(div_yield, 4),
+            market_cap=_num(ft.get("market_cap")),
+            revenue_growth_3y=_num(ft.get("revenue_growth_3y"), 4),
+            eps_growth_estimate_next_y=_num(ft.get("eps_growth_estimate_next_y"), 4),
+            momentum_6m=_num(ft.get("momentum_6m"), 4),
+            beta=_num(ft.get("beta"), 3),
+            annual_return=_num(annual_return.get(t), 4),
+            annual_vol=_num(annual_vol.get(t), 4),
+            analyst_target_price=_num(target, 2),
+            upside_pct=_num(upside, 4),
+            partial=partial,
+        ))
+
+    rows.sort(key=lambda r: (r.composite_score is None, -(r.composite_score or 0)))
+    coverage_full = sum(1 for r in rows if not r.partial)
+
+    return UniverseScanResponse(
+        generated_at=datetime.now().isoformat(timespec="seconds"),
+        market_proxy=MARKET_PROXY_TICKER if market_series is not None else None,
+        coverage_full=coverage_full,
+        coverage_total=len(rows),
+        rows=rows,
+    )

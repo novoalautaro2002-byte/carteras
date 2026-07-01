@@ -49,3 +49,43 @@ class UniverseTicker(BaseModel):
 class RefreshResponse(BaseModel):
     tickers_refreshed: int
     errors: list[str] = Field(default_factory=list)
+
+
+class UniverseScanRow(BaseModel):
+    """Una fila del panel de mercado: todos los indicadores de un ticker."""
+    ticker: str
+    sector: str
+    last_price: Optional[float] = None
+    # Scoring (composite 0-100 + z-scores por factor para recomputar en el front)
+    composite_score: Optional[float] = None
+    score_value: Optional[float] = None
+    score_quality: Optional[float] = None
+    score_growth: Optional[float] = None
+    score_momentum: Optional[float] = None
+    # Fundamentales
+    pe_ratio: Optional[float] = None
+    price_to_book: Optional[float] = None
+    roe: Optional[float] = None
+    debt_to_equity: Optional[float] = None
+    dividend_yield: Optional[float] = None
+    market_cap: Optional[float] = None
+    revenue_growth_3y: Optional[float] = None
+    eps_growth_estimate_next_y: Optional[float] = None
+    # Técnicos / riesgo
+    momentum_6m: Optional[float] = None
+    beta: Optional[float] = None
+    annual_return: Optional[float] = None
+    annual_vol: Optional[float] = None
+    # Analistas
+    analyst_target_price: Optional[float] = None
+    upside_pct: Optional[float] = None
+    # Flag: fundamentals incompletos (típico del free tier de FMP)
+    partial: bool = False
+
+
+class UniverseScanResponse(BaseModel):
+    generated_at: str
+    market_proxy: Optional[str] = None
+    coverage_full: int          # cuántos tickers con fundamentals completos
+    coverage_total: int
+    rows: list[UniverseScanRow]
