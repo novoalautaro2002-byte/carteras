@@ -23,7 +23,19 @@ cartera de ejemplo (salida real del motor, congelada). No necesita backend.
 > página en Pages (HTTPS) no puede pegarle a un backend en `localhost`, así que
 > para armar carteras de verdad hay que correr el backend en tu máquina.
 
-## Setup local
+## Uso rápido (Windows)
+
+La forma más simple, sin terminal:
+
+1. **Primera vez**: doble-click en **`setup.bat`** (crea el entorno virtual e
+   instala todo). Después abrí `backend\.env` y pegá tu `FMP_API_KEY`.
+2. **Cada vez que quieras usarlo**: doble-click en **`run.bat`** — levanta el
+   backend y abre la app en el navegador. Para apagarlo, cerrá la ventana negra
+   del backend.
+
+Si preferís hacerlo a mano, o no estás en Windows, seguí los pasos de abajo.
+
+## Setup local (manual)
 
 ### 1. Backend
 
